@@ -216,22 +216,45 @@ function getAnalyticsStats(periodKey) {
 
 function renderAnalyticsDashboard() {
   assertAnalyticsAccess_();
+  ensureAnalyticsTriggers_();
   return HtmlService.createHtmlOutputFromFile('AnalyticsDashboard').setTitle('إحصائيات موقع داماي').setWidth(1200).setHeight(800);
 }
 
-/** أرشفة (لا حذف) الصفوف الأقدم من 12 شهرًا إلى شيت أرشيف. شغّلها يدويًا أو بمشغّل سنوي. */
-function archiveOldVisits() {
-  assertAnalyticsAccess_();
-  var sh = ensureSheet_(AN_SHEET), last = sh.getLastRow();
-  if (last < 2) return 0;
-  var cut = new Date(); cut.setMonth(cut.getMonth() - 12);
-  var data = sh.getRange(2, 1, last - 1, AN_HEADERS.length).getValues();
-  var old = data.filter(function (r) { return r[0] instanceof Date && r[0] < cut; });
-  if (!old.length) return 0;
-  var arc = ensureSheet_(AN_ARCHIVE_SHEET);
-  arc.getRange(arc.getLastRow() + 1, 1, old.length, AN_HEADERS.length).setValues(old);
-  var keep = data.filter(function (r) { return !(r[0] instanceof Date && r[0] < cut); });
-  sh.getRange(2, 1, last - 1, AN_HEADERS.length).clearContent();
-  if (keep.length) sh.getRange(2, 1, keep.length, AN_HEADERS.length).setValues(keep);
-  return old.length;
+/* ============================ الأرشفة والمشغّل التلقائي ============================ */
+
+/** دالة نقية: تفصل الصفوف الأقدم من cut. صفوف الأرشيف تُجرَّد من معرّف الزائر (العمود 2) فتصير غير مرتبطة بجهاز. */
+function splitForArchive_(data, cut) {
+  var old = [], keep = [];
+  data.forEach(function (r) {
+    if (r[0] instanceof Date && r[0] < cut) { var a = r.slice(); a[1] = ''; old.push(a); } else keep.push(r);
+  });
+  return { old: old, keep: keep };
+}
+
+/** تعمل بالمشغّل الشهري (بلا فحص صلاحية لأن المشغّل لا يحمل مستخدمًا نشطًا). تنقل ما تجاوز 12 شهرًا إلى الأرشيف دون حذف. */
+function archiveOldVisitsJob() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sh = ensureSheet_(AN_SHEET), last = sh.getLastRow();
+    if (last < 2) return 0;
+    var cut = new Date(); cut.setMonth(cut.getMonth() - 12);
+    var data = sh.getRange(2, 1, last - 1, AN_HEADERS.length).getValues();
+    var sp = splitForArchive_(data, cut);
+    if (!sp.old.length) return 0;
+    var arc = ensureSheet_(AN_ARCHIVE_SHEET);
+    arc.getRange(arc.getLastRow() + 1, 1, sp.old.length, AN_HEADERS.length).setValues(sp.old);
+    sh.getRange(2, 1, last - 1, AN_HEADERS.length).clearContent();
+    if (sp.keep.length) sh.getRange(2, 1, sp.keep.length, AN_HEADERS.length).setValues(sp.keep);
+    return sp.old.length;
+  } finally { lock.releaseLock(); }
+}
+
+/** تشغيل يدوي من المدير (بفحص الصلاحية). */
+function archiveOldVisits() { assertAnalyticsAccess_(); return archiveOldVisitsJob(); }
+
+/** ينشئ مشغّلًا شهريًا (اليوم 1، الساعة 3 صباحًا) مرة واحدة فقط. يُستدعى تلقائيًا عند أول فتح للوحة بحساب المدير. */
+function ensureAnalyticsTriggers_() {
+  var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'archiveOldVisitsJob'; });
+  if (!has) ScriptApp.newTrigger('archiveOldVisitsJob').timeBased().onMonthDay(1).atHour(3).create();
 }

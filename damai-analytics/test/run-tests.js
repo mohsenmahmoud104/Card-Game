@@ -56,6 +56,12 @@ ok(s.visitors >= 2, `اليوم يحتسب زوار اليوم (النتيجة $
 s = ctx.computeStats_([], '30d', now);
 ok(s.visitors === 0 && s.countries.length === 0, 'شيت فارغ لا يكسر الحساب');
 
+// 3) الأرشفة: تُجرَّد الصفوف القديمة من معرّف الزائر وتبقى الحديثة كما هي
+const cut = new Date(now.getTime() - 365 * 24 * H);
+const sp = ctx.splitForArchive_([mk(24 * 400, 'old1abcdefgh', 'visit', '/', 'Google', 'موبايل', 'EG'), mk(24, 'new1abcdefgh', 'visit', '/', 'Google', 'موبايل', 'EG')], cut);
+ok(sp.old.length === 1 && sp.old[0][1] === '' && sp.old[0][9] === 'EG', 'الأرشيف: صف قديم بلا معرّف زائر');
+ok(sp.keep.length === 1 && sp.keep[0][1] === 'new1abcdefgh', 'الأرشيف: الصف الحديث يبقى بمعرّفه');
+
 fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'out', 'stats-fixture.json'), JSON.stringify(ctx.computeStats_(rows, '30d', now)));
 // ثروة بيانات أكبر للمعاينة البصرية
