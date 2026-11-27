@@ -1,6 +1,6 @@
 // اختبار منطق Analytics.gs بمحاكاة خدمات Apps Script الدنيا (بلا شبكة).
 const fs = require('fs'), vm = require('vm'), path = require('path');
-const code = fs.readFileSync(path.join(__dirname, '..', 'Analytics.gs'), 'utf8');
+const code = ['Intake.gs', 'Analytics.gs'].map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
 const TZ = 'Asia/Kuala_Lumpur';
 const fmt = (d, f) => { // تنسيق مكافئ لـ Utilities.formatDate بتوقيت كوالالمبور (UTC+8)
   const x = new Date(d.getTime() + 8 * 3600000), p = n => String(n).padStart(2, '0');
@@ -15,7 +15,7 @@ let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('✗', m); } 
 const now = new Date('2026-11-23T04:00:00Z');
 const good = { event: 'visit', vid: 'abcdef1234567890', page: '/index.html', title: 'الرئيسية', source: 'Facebook', device: 'موبايل', os: 'Android', browser: 'Chrome', country: 'eg', lang: 'ar', screen: '390x844', tz: 'Asia/Kuala_Lumpur' };
 let r = ctx.buildRow_(good, now);
-ok(r && r[9] === 'EG' && r[10] === 'netlify', 'رمز الدولة من Netlify يُقبل ويُرفع لحروف كبيرة');
+ok(r && r[9] === 'EG' && r[10] === 'cloudflare', 'رمز الدولة من Netlify يُقبل ويُرفع لحروف كبيرة');
 r = ctx.buildRow_(Object.assign({}, good, { country: '' }), now);
 ok(r[9] === 'MY' && r[10] === 'tz', 'السقوط إلى المنطقة الزمنية عند غياب الدولة');
 r = ctx.buildRow_(Object.assign({}, good, { country: '', tz: 'Mars/Base' }), now);
