@@ -88,11 +88,19 @@
     }
     function flush() { var q = queue; queue = []; q.forEach(function (o) { o.country = country || ''; post(o); }); }
 
-    // الدولة من دالة Netlify الحافة (لا تُخزَّن IP). مهلة قصيرة ثم نكمل بلا دولة (يُقدَّر من المنطقة الزمنية).
+    // الدولة: /cdn-cgi/trace (يعمل على Cloudflare بلا دوال، ويقرأ المتصفح سطر loc فقط)، ثم /api/geo (Netlify/دالة).
+    // لا يُرسَل أي IP إلى الخادم ولا يُخزَّن. مهلة قصيرة ثم نكمل بلا دولة (تُقدَّر من المنطقة الزمنية).
     var timer = setTimeout(function () { if (country === null) { country = ''; flush(); } }, 1500);
-    fetch('/api/geo', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
-      country = (j && /^[A-Z]{2}$/.test(j.country)) ? j.country : '';
-    }).catch(function () { country = ''; }).then(function () { clearTimeout(timer); flush(); });
+    function geoTrace() {
+      return fetch('/cdn-cgi/trace', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw 0; return r.text(); })
+        .then(function (t) { var m = /^loc=([A-Z]{2})$/m.exec(t); if (!m) throw 0; return m[1]; });
+    }
+    function geoApi() {
+      return fetch('/api/geo', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (j) { if (!j || !/^[A-Z]{2}$/.test(j.country)) throw 0; return j.country; });
+    }
+    geoTrace().catch(geoApi).then(function (c) { country = c; }).catch(function () { country = ''; })
+      .then(function () { clearTimeout(timer); flush(); });
 
     send('visit');
     window.damaiTrack = function (ev) { send(String(ev)); };

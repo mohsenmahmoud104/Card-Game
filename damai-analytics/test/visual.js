@@ -14,6 +14,7 @@ const { chromium } = require('playwright'); const fs = require('fs'), path = req
   }
   // اختبار المتتبّع مع نقطة نهاية محاكاة
   const hits = []; const srv = http.createServer((q, s) => {
+    if (q.url.startsWith('/cdn-cgi/trace')) { if (process.env.TRACE === '1') { s.setHeader('content-type','text/plain'); return s.end('fl=1\nloc=MY\nip=1.2.3.4\n'); } s.statusCode = 404; return s.end(); }
     if (q.url.startsWith('/api/geo')) { s.setHeader('content-type', 'application/json'); return s.end('{"country":"EG"}'); }
     if (q.method === 'POST') { let d = ''; q.on('data', c => d += c); q.on('end', () => { hits.push(JSON.parse(d)); s.end('{}'); }); return; }
     s.setHeader('content-type', 'text/html'); s.end('<html lang="ar"><title>الرئيسية | داماي</title><a id=w href="https://wa.me/60128845307">w</a><a id=p href="/guide.pdf">p</a>');
